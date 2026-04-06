@@ -1,0 +1,1 @@
+# Coursework from Kaggle Geospatial Analysis mini course
