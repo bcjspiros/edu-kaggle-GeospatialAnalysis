@@ -1,0 +1,76 @@
+---
+title: "Your First Map"
+format: html
+editor: visual
+---
+
+# Reproducing the Python geospatial course in R
+
+```{r}
+library(tidyverse)
+library(sf)
+library(here)
+
+
+```
+
+```{r}
+full_data <- read_sf(here("data/DEC_lands/DEC_lands/DEC_lands.shp"))
+```
+
+```{r}
+View(full_data)
+```
+
+```{r}
+data <- select(full_data, c("CLASS", "COUNTY", "geometry"))
+```
+
+```{r}
+data %>% 
+    filter(!is.na(CLASS)) %>% 
+    count(CLASS, sort = TRUE)
+```
+```{r}
+wild_lands <- data %>% 
+    filter(CLASS %in% c('WILD FOREST', 'WILDERNESS'))
+```
+
+```{r}
+head(wild_lands)
+```
+```{r}
+# plot(st_geometry(wild_lands))
+plot(wild_lands)
+
+```
+
+```{r}
+
+# Campsites in New York state (Point)
+POI_data <- read_sf(here("data/DEC_pointsinterest/DEC_pointsinterest/Decptsofinterest.shp"))
+campsites <- POI_data %>% 
+    filter(ASSET == "PRIMITIVE CAMPSITE")
+
+# Foot trails in New York state (LineString)
+roads_trails <- read_sf(here("data/DEC_roadstrails/DEC_roadstrails/Decroadstrails.shp"))
+trails <- roads_trails  %>% 
+    filter(ASSET == "FOOT TRAIL")
+
+# County boundaries in New York state (Polygon)
+counties <- read_sf(here("data/NY_county_boundaries/NY_county_boundaries/NY_county_boundaries.shp"))
+```
+
+
+```{r}
+#| fig-width: 10
+#| fig-height: 6
+
+ggplot() +
+    geom_sf(data = counties, fill = NA) +
+    geom_sf(data = wild_lands, color = 'lightgreen') +
+    geom_sf(data = campsites, size = 0.6, color = 'maroon') +
+    geom_sf(data = trails, size = 0.3, color = 'black') +
+    theme_minimal()
+```
+
