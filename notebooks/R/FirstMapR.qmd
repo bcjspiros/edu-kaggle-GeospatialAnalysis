@@ -67,10 +67,74 @@ counties <- read_sf(here("data/NY_county_boundaries/NY_county_boundaries/NY_coun
 #| fig-height: 6
 
 ggplot() +
-    geom_sf(data = counties, fill = NA) +
     geom_sf(data = wild_lands, color = 'lightgreen') +
     geom_sf(data = campsites, size = 0.6, color = 'maroon') +
     geom_sf(data = trails, size = 0.3, color = 'black') +
+    geom_sf(data = counties, fill = NA) +
     theme_minimal()
 ```
+
+# Lesson 1 exercises
+
+```{r}
+
+world_loans <- read_sf(here("data/kiva_loans/kiva_loans/kiva_loans.shp"))
+world <- read_sf(here("data/ne_110m_admin_0_countries/ne_110m_admin_0_countries.shp"))
+
+```
+
+Kiva data is missing a `.prj` file containing the Coordinate Reference Systen (CRS)
+Grabbing the `world` EPSG (4326) and setting the kiva data with that
+
+See <https://epsg.io/4326>
+
+```{r}
+st_crs(world)
+```
+```{r}
+st_crs(world_loans) <- 4326
+```
+
+
+## Plot
+```{r}
+#| fig-width: 10
+#| fig-height: 6
+
+ggplot() +
+    geom_sf(data = world_loans, color = 'green') +
+    geom_sf(data = world, fill = NA) +
+    theme_minimal()
+```
+
+## Philipines plot
+
+```{r}
+PHL_loans <- world_loans %>% 
+    filter(country == "Philippines")
+```
+
+Philippines map file in KML format
+
+**NOTE** Specifying `driver = "KML"` caused an error, but leaving it off seems to work
+
+```{r}
+st_layers(here("data/Philippines_AL258.kml"))
+```
+
+```{r}
+PHL <- read_sf(here("data/Philippines_AL258.kml"))
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 6
+
+ggplot() +
+    geom_sf(data = PHL_loans, color = 'green') + # adding the points first allows the province borders to show up
+    geom_sf(data = PHL, fill = NA) +
+    theme_minimal()
+```
+
+
 
