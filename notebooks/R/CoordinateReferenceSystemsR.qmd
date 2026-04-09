@@ -1,0 +1,84 @@
+---
+title: "Coordinate Reference Systems"
+format: html
+editor: visual
+---
+
+# Kaggle Geospatial certificate CRS course in R
+
+```{r}
+library(tidyverse)
+library(sf)
+library(here)
+library(units)
+```
+
+```{r}
+regions <- read_sf(here("data/ghana/ghana/Regions/Map_of_Regions_in_Ghana.shp"))
+```
+
+```{r}
+st_crs(regions)
+```
+```{r}
+# Create a DataFrame with health facilities in Ghana
+facilities_df <- read_csv(here("data/ghana/ghana/health_facilities.csv"))
+```
+
+There are a lot of missing lat/long values in the CSV that we need to drop.
+`geopandas` just ignores them, but we need to filter them out for `sf`
+
+```{r}
+facilities_df %>% 
+    summarise(across(c("Longitude", "Latitude"), ~ sum(is.na(.))))
+```
+
+```{r}
+# Convert to sf object
+# CRS 4326 = WGS84 (standard GPS coordinates)
+facilities <- facilities_df %>% 
+    filter(!is.na(Longitude), !is.na(Latitude)) %>% 
+    st_as_sf(
+        coords = c("Longitude", "Latitude"), # order: x = lon, y = lat
+        crs = 4326,
+        remove = FALSE  # Keep original lat/lon columns
+    )
+```
+
+## Plots
+
+```{r}
+#| fig-width: 8
+#| fig-height: 8
+
+ggplot() +
+    geom_sf(data = regions,
+            linetype = "dotted") +
+    geom_sf(data = st_transform(facilities, 32630),
+            color = "blue",
+            size = 1) +
+    theme_minimal()
+```
+
+st_transform using **proj4** string
+
+```{r}
+st_transform(regions, "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")
+```
+
+## geometry attributes
+
+```{r}
+st_coordinates(head(st_geometry(facilities)))[,"X"]
+```
+
+```{r}
+regions <- regions %>% 
+    mutate(AREA = set_units(st_area(st_geometry(regions)), km^2))
+```
+
+
+```{r}
+print(str_glue("The area of Ghana is {sum(regions$AREA)} square kilometers"))
+```
+
