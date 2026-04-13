@@ -4,6 +4,7 @@
 
 Python:
 - geopandas
+- geodatasets
 - pyprojroot
 
 R:

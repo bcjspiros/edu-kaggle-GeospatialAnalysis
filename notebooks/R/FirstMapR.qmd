@@ -10,8 +10,6 @@ editor: visual
 library(tidyverse)
 library(sf)
 library(here)
-
-
 ```
 
 ```{r}
@@ -135,6 +133,7 @@ ggplot() +
     geom_sf(data = PHL, fill = NA) +
     theme_minimal()
 ```
+
 
 
 
