@@ -86,42 +86,6 @@ print(str_glue("The area of Ghana is {sum(regions$AREA)} square kilometers"))
 
 ```{r}
 world <- read_sf(here("data/tmap_World/tmap_World.shp"))
-world <- world %>% rename(continent = contnnt)
-```
-```{r}
-ne_world <- read_sf(here("data/ne_110m_admin_0_countries/ne_110m_admin_0_countries.shp"))
-```
-
-```{r}
-View(ne_world)
-```
-```{r}
-View(world)
-```
-
-
-```{r}
-library(tmap)
-View(World)
-```
-
-```{r}
-old_col <- c()
-new_col <- c()
-
-col_names <- colnames(df)
-
-for (col in col_names) {
-  if (nchar(col) > 11) {
-    old_col <- c(old_col, col)
-    new_col <- c(new_col, str_trunc(col, 11, ellipsis = ""))
-  }
-}
-```
-
-
-```{r}
-st_write(World, here("data/tmap_World/tmap_World.geojson"))
 ```
 
 ```{r}
