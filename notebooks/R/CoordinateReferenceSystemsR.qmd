@@ -85,6 +85,30 @@ print(str_glue("The area of Ghana is {sum(regions$AREA)} square kilometers"))
 # Exercises
 
 ```{r}
+birds_df <- read_csv(here("data/purple_martin.csv"))
+```
+
+```{r}
+colnames(birds_df) <- gsub(
+    "\\.",
+    "_",
+    make.names(colnames(birds_df))
+    )
+unique_birds <- n_distinct(birds_df$tag_local_identifier)
+print(str_glue("There are {unique_birds} different birds in the dataset."))
+```
+```{r}
+birds <- birds_df %>% 
+    st_as_sf(
+        coords = c("location_long", "location_lat"),
+        crs = 4326,
+        remove = FALSE
+    )
+```
+
+## Plot data
+
+```{r}
 world <- read_sf(here("data/tmap_World/tmap_World.shp"))
 ```
 
@@ -99,7 +123,174 @@ americas <- world %>%
 #| fig-height: 6
 
 ggplot() +
-    geom_sf(data = americas)
+    geom_sf(data = americas, fill = NA, color = "grey") +
+    geom_sf(data = birds, size = 1, color = "blue") +
+    theme_minimal()
+```
+```{r}
+birds
 ```
 
+### creates linestrings for the paths of each bird and the starting and ending point for each bird's journey
+
+```{r}
+path_gdf <- birds %>% 
+    arrange(tag_local_identifier, timestamp) %>% # ensures points are ordered by timestamp
+    summarize(
+        .by = tag_local_identifier,
+        # converts the MULTIPOINT obj from st_combine into a LINESTRING
+        geometry = st_combine(geometry) %>% st_cast("LINESTRING")
+    ) %>% 
+    st_as_sf()
+    
+head(path_gdf)
+```
+
+```{r}
+start_gdf <- birds %>% 
+    arrange(tag_local_identifier, timestamp) %>% # ensures points are ordered by timestamp
+    summarize(
+        .by = tag_local_identifier,
+        # convert the MULTIPOINT obj from st_combine into a list of POINTs,
+        # then we grab the first one for summarize to set the geometry col to 
+        geometry = st_combine(geometry) %>%
+            st_cast('POINT') %>%
+            .[1]
+    ) %>% 
+    st_as_sf()
+
+head(start_gdf$geometry %>% st_coordinates())
+``` 
+
+```{r}
+end_gdf <- birds %>% 
+    arrange(tag_local_identifier, timestamp) %>% # ensures points are ordered by timestamp
+    summarize(
+        .by = tag_local_identifier,
+        # convert the MULTIPOINT obj from st_combine into a list of POINTs,
+        # then we grab the last one for summarize to set the geometry col to 
+        geometry = st_combine(geometry) %>%
+            st_cast('POINT') %>%
+            .[length(.)]
+    ) %>% 
+    st_as_sf()
+
+head(end_gdf$geometry %>% st_coordinates())
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 6
+
+ggplot() +
+    geom_sf(data = americas, fill = NA, color = "grey") +
+    geom_sf(data = start_gdf, aes(color = factor(tag_local_identifier)), size = 2) +
+    geom_sf(data = path_gdf, aes(color = factor(tag_local_identifier)), linewidth = 1) +
+    geom_sf(data = end_gdf, aes(color = factor(tag_local_identifier)), size = 2) +
+    scale_color_manual(values = 
+                           c("red",
+                             'orange',
+                             'gold',
+                             'green',
+                             'blue',
+                             'purple',
+                             'salmon',
+                             'cyan',
+                             'burlywood',
+                             'cadetblue',
+                             'maroon'
+                             )
+                       ) +
+    theme_minimal()
+```
+
+## Protected areas calculations
+
+```{r}
+protected_filepath <- here("data/SAPA_Aug2019-shapefile/SAPA_Aug2019-shapefile/SAPA_Aug2019-shapefile-polygons.shp")
+protected_areas <- read_sf(protected_filepath)
+```
+
+```{r}
+head(protected_areas)
+```
+```{r}
+south_america <- americas %>% 
+    filter(continent == "South America")
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 6
+
+ggplot() +
+    geom_sf(data = south_america, fill = NA, color = "grey") +
+    geom_sf(data = protected_areas, fill = "blue", color = "blue")
+
+```
+
+```{r}
+P_Area <- sum(protected_areas$REP_AREA - protected_areas$REP_M_AREA)
+print(str_glue("South America has {P_Area} square kilometers of protected areas."))
+```
+
+```{r}
+head(south_america)
+```
+```{r}
+st_crs(south_america)
+```
+
+```{r}
+south_america <- st_transform(south_america, 3035)
+```
+
+
+```{r}
+totalArea <- 
+    set_units(
+        sum(
+            st_area(
+                st_geometry(
+                    st_transform(
+                        south_america, 
+                        3035
+                    )
+                )
+            )
+        ),
+        km^2
+    )
+
+print(totalArea)
+
+```
+
+```{r}
+# What percentage of South America is protected?
+percentage_protected <- round((P_Area/totalArea) * 100, 2)
+print(str_glue("Approximately {percentage_protected}% of South America is protected."))
+```
+
+```{r}
+nom_protected_areas <- protected_areas %>% 
+    filter(MARINE != 2)
+
+birds_sa <- birds %>% 
+    filter((st_coordinates(st_geometry(.))[,"Y"]) < 0)
+```
+```{r}
+birds %>% filter((st_coordinates(st_geometry(.))[,"Y"]) < 0)
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 10
+
+ggplot() +
+    geom_sf(data = south_america, fill = "white", color = "grey") +
+    geom_sf(data = nom_protected_areas, fill = "skyblue", color = NA, alpha = 0.4) +
+    geom_sf(data = birds_sa, color = 'red', alpha = 0.6, size = 2) +
+    theme_minimal()
+```
 
