@@ -1,0 +1,228 @@
+---
+title: "Interactive Maps"
+format: html
+---
+
+# Introduction
+
+In this tutorial, you'll learn how to create interactive maps with the leaflet package. Along the way, you'll apply your new skills to visualize Boston crime data.
+
+## leaflet docs
+<https://rstudio.github.io/leaflet/>
+
+
+```{r}
+library(here)
+library(tidyverse)
+library(sf)
+library(leaflet)
+library(leaflet.extras)
+```
+
+# Your first interactive map
+We begin by creating a relatively simple map
+
+```{r}
+# create a map using leaflet's default open street map tiles
+m_1 <- leaflet() %>% 
+    addTiles() %>% 
+    setView(lng = -71.0589, lat = 42.32, zoom = 12)
+
+# display the map
+m_1
+```
+
+Several arguments customize the appearance of the map:
+
+* `setView` sets the initial center of the map. We use the latitude (42.32° N) and longitude (-71.0589° E) of the city of Boston. (Note: use order of lng, lat)
+* `addTiles` changes the styling of the map; in this case, we choose the [OpenStreetMap](https://www.openstreetmap.org/#map=10/42.32/-71.0589) style. If you're curious, you can find the other options listed [here](https://rstudio.github.io/leaflet/reference/providers.html).
+* `zoom` sets the initial level of zoom of the map, where higher values zoom in closer to the map.
+Take the time now to explore by zooming in and out, or by dragging the map in different directions.
+
+# The data
+Now, we'll add some crime data to the map!
+
+```{r}
+crimes <- read_csv(here("data/crimes-in-boston/crimes-in-boston/crime.csv"))
+```
+
+```{r}
+# Drop rows with missing locations
+# Focus on major crimes since 2018
+
+crimes <- crimes %>% 
+    drop_na(c('Lat', 'Long', 'DISTRICT')) %>%
+    filter(OFFENSE_CODE_GROUP %in% c(
+        'Larceny', 
+        'Auto Theft', 
+        'Robbery', 
+        'Larceny From Motor Vehicle', 
+        'Residential Burglary', 
+        'Simple Assault', 
+        'Harassment', 
+        'Ballistics', 
+        'Aggravated Assault', 
+        'Other Burglary', 
+        'Arson', 
+        'Commercial Burglary', 
+        'HOME INVASION', 
+        'Homicide', 
+        'Criminal Harassment', 
+        'Manslaughter'
+        )
+    ) %>% 
+    filter(YEAR >= 2018)
+
+```
+
+```{r}
+head(crimes)
+```
+
+## Plotting points
+To reduce the amount of data we need to fit on the map, we'll (temporarily) confine our attention to daytime robberies.
+
+```{r}
+daytime_robberies <- crimes %>% 
+    filter(OFFENSE_CODE_GROUP == "Robbery") %>% 
+    filter(HOUR %in% 9:17)
+```
+
+```{r}
+head(daytime_robberies)
+```
+
+
+Marker
+
+```{r}
+leaflet(daytime_robberies) %>% 
+    setView(lng = -71.0589, lat = 42.32, zoom = 12) %>% 
+    addProviderTiles("CartoDB.Positron") %>% 
+    addMarkers(lng = ~Long, 
+               lat = ~Lat,
+               clusterOptions = markerClusterOptions()
+    )
+```
+
+## bubble map
+
+```{r}
+
+color_producer <- function(x) {
+    # ifelse(x <= 12, 'forestgreen', "darkred") # most concise for this use
+    color_vec <- c()
+    for (i in seq_along(x)) {
+        if (x[i] <= 12) {
+            color_vec <- c(color_vec, "forestgreen")
+        } else {
+            color_vec <- c(color_vec, "darkred")
+        }
+    }
+    return(color_vec)
+}
+
+leaflet(daytime_robberies) %>% 
+    setView(lng = -71.0589, lat = 42.32, zoom = 12) %>% 
+    addProviderTiles("CartoDB.Positron") %>%
+    addCircles(lng = ~Long, 
+               lat = ~Lat,
+               radius = 20,
+               color = ~color_producer(HOUR)
+    )
+```
+
+## Heatmap
+
+```{r}
+leaflet(crimes) %>% 
+    setView(lng = -71.0589, lat = 42.32, zoom = 12) %>% 
+    addProviderTiles("CartoDB.Positron") %>%
+    addHeatmap(lng = ~Long, 
+               lat = ~Lat,
+               radius = 10,
+               blur = 15, 
+               max = 1,
+               minOpacity = 0.5
+               )
+               
+```
+
+## Choropleth map
+
+```{r}
+districts_full <- read_sf(here("data/Police_Districts/Police_Districts/Police_Districts.shp"))
+```
+
+
+```{r}
+head(districts_full)
+```
+
+```{r}
+districts <- districts_full %>% 
+    select(c(DISTRICT, geometry))
+```
+
+```{r}
+head(districts)
+```
+
+
+```{r}
+plot_df <- crimes %>% 
+    count(DISTRICT, sort = FALSE)
+    # plot_df$n <- as.factor(plot_df$n)
+```
+
+
+```{r}
+head(plot_df)
+```
+```{r}
+# joined df not actually needed
+districts_joined <- districts %>% 
+    left_join(plot_df, by = c("DISTRICT" = "DISTRICT"))
+```
+
+### setup a color pallete and labels for popups
+
+```{r}
+pal <- colorNumeric("YlGnBu", plot_df$n)
+labels <- sprintf(
+  "<strong>BPD district %s</strong><br/>%d crimes",
+  districts$DISTRICT, plot_df$n
+) %>% lapply(htmltools::HTML)
+```
+
+```{r}
+leaflet(districts_joined) %>% 
+    setView(lng = -71.0589, lat = 42.32, zoom = 12) %>% 
+    addProviderTiles("CartoDB.Positron") %>% 
+    addPolygons(color = "black",
+                weight = 0.5,
+                opacity = 0.8,
+                fillColor = ~pal(plot_df$n), 
+                fillOpacity = 0.7,
+                highlightOptions = highlightOptions(
+                    weight = 1,
+                    opacity = 1,
+                    fillOpacity = 0.7,
+                    bringToFront = TRUE
+                ),
+                label = labels,
+                labelOptions = labelOptions(
+                    style = list("font-weight" = "normal", padding = "3px 8px"),
+                    textsize = "15px",
+                    direction = "auto"
+                )
+    ) %>% 
+    addLegend(pal = pal, 
+              values = ~plot_df$n, 
+              opacity = 0.7, 
+              title = NULL,
+                position = "bottomright"
+    )
+    
+```
+

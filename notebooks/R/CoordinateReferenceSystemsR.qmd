@@ -211,6 +211,22 @@ protected_filepath <- here("data/SAPA_Aug2019-shapefile/SAPA_Aug2019-shapefile/S
 protected_areas <- read_sf(protected_filepath)
 ```
 
+### shapefile is big 
+
+rewrite as geojson for compression with xz
+
+```{r}
+st_write(protected_areas,
+         here("data/SAPA_Aug2019-shapefile/SAPA_Aug2019-shapefile/SAPA_Aug2019-shapefile-polygons.geojson"))
+```
+FlatGeobuf with zstd compresses about as well as GeoJson, but the unpacked file is much smaller
+
+```{r}
+st_write(protected_areas,
+         here("data/SAPA_Aug2019-shapefile/SAPA_Aug2019-shapefile/SAPA_Aug2019-flatgeobuf-polygons.fgb"))
+
+```
+
 ```{r}
 head(protected_areas)
 ```

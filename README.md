@@ -6,8 +6,11 @@ Python:
 - geopandas
 - geodatasets
 - pyprojroot
+- folium
 
 R:
 - sf
 - tidyverse
 - here
+- leaflet
+- leaflet.extras
