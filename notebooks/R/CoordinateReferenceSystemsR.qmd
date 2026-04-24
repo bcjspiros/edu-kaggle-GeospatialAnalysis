@@ -151,31 +151,27 @@ start_gdf <- birds %>%
     arrange(tag_local_identifier, timestamp) %>% # ensures points are ordered by timestamp
     summarize(
         .by = tag_local_identifier,
-        # convert the MULTIPOINT obj from st_combine into a list of POINTs,
-        # then we grab the first one for summarize to set the geometry col to 
-        geometry = st_combine(geometry) %>%
-            st_cast('POINT') %>%
-            .[1]
+        geometry = geometry[1]
     ) %>% 
     st_as_sf()
 
 head(start_gdf$geometry %>% st_coordinates())
 ``` 
 
+
 ```{r}
 end_gdf <- birds %>% 
     arrange(tag_local_identifier, timestamp) %>% # ensures points are ordered by timestamp
     summarize(
         .by = tag_local_identifier,
-        # convert the MULTIPOINT obj from st_combine into a list of POINTs,
-        # then we grab the last one for summarize to set the geometry col to 
-        geometry = st_combine(geometry) %>%
-            st_cast('POINT') %>%
-            .[length(.)]
+        geometry = geometry[length(geometry)]
     ) %>% 
     st_as_sf()
 
 head(end_gdf$geometry %>% st_coordinates())
+```
+```{r}
+head(end_gdf)
 ```
 
 ```{r}

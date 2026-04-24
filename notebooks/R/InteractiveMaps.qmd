@@ -17,6 +17,7 @@ library(tidyverse)
 library(sf)
 library(leaflet)
 library(leaflet.extras)
+library(units)
 ```
 
 # Your first interactive map
@@ -104,7 +105,7 @@ leaflet(daytime_robberies) %>%
                clusterOptions = markerClusterOptions()
     )
 ```
-
+qq
 ## bubble map
 
 ```{r}
@@ -225,4 +226,182 @@ leaflet(districts_joined) %>%
     )
     
 ```
+
+# Exercises
+
+```{r}
+plate_boundaries <- read_sf(here("data/Plate_Boundaries/Plate_Boundaries/Plate_Boundaries.shp"))
+
+```
+
+```{r}
+head(plate_boundaries)
+```
+### Setting up the polylines
+
+```{r}
+
+# don't think I need this to create the polylines, but wanted to see how it was done
+# to match the Python example
+coords_df <- plate_boundaries %>% 
+    mutate(coordinates = map(geometry, ~ { 
+        coords <- st_coordinates(.)
+        map(seq_len(nrow(coords)), function(i) c(coords[i, "X"], coords[i, "Y"]))
+        }))
+
+```
+
+leaflet is great, you can just pass a sfc MULTILINESTRING object to addPolylines
+
+First combine the LINESTRINGs into a MULTILINESTRING 
+
+```{r}
+pb_multiline <- st_combine(plate_boundaries$geometry)
+```
+
+```{r}
+leaflet() %>% 
+    setView(lng = 136, lat = 35, zoom = 5) %>% 
+    addProviderTiles("CartoDB.Positron") %>% 
+    addPolylines(data = pb_multiline, color = "black")
+    
+```
+
+now we add earthquakes
+
+```{r}
+earthquakes <- read_csv(here("data/earthquakes1970-2014.csv"))
+```
+
+```{r}
+leaflet() %>% 
+    setView(lng = 136, lat = 35, zoom = 5) %>% 
+    addProviderTiles("CartoDB.Positron") %>% 
+    addPolylines(data = pb_multiline, color = "black") %>% 
+    addHeatmap(data = earthquakes,
+               lng = ~Longitude, 
+               lat = ~Latitude, 
+               radius = 10, 
+               minOpacity = 0.5)
+```
+
+```{r}
+
+color_producer <- function(x) {
+    color_vec <- c()
+    for (i in seq_along(x)) {
+        if (x[i] < 50) {
+            color_vec <- c(color_vec, "blue")
+        } else if (x[i] < 100) {
+            color_vec <- c(color_vec, "green")
+        } else {
+            color_vec <- c(color_vec, "red")
+        }
+    }
+    return(color_vec)
+}
+
+leaflet() %>% 
+    setView(lng = 136, lat = 35, zoom = 5) %>% 
+    addProviderTiles("CartoDB.Positron") %>% 
+    addPolylines(data = pb_multiline, color = "black") %>%
+    addCircles(data = earthquakes,
+               lng = ~Longitude, 
+               lat = ~Latitude,
+               radius = 2000,
+               color = ~color_producer(earthquakes$Depth)
+               )
+```
+
+Japan's prefectures
+
+```{r}
+prefectures = read_sf(here("data/japan-prefecture-boundaries/japan-prefecture-boundaries/japan-prefecture-boundaries.shp"))
+```
+
+population stats
+
+```{r}
+population <- read_csv(here("data/japan-prefecture-population.csv"))
+```
+```{r}
+stats <- tibble(prefecture = prefectures$prefecture,
+       area_sqkm = 
+           st_transform(st_geometry(prefectures), 32654) %>%
+           st_area() %>%
+           set_units(km^2) %>% 
+           as.double()
+       ) %>%
+    left_join(population, by = "prefecture") %>% 
+    mutate(density = population / area_sqkm)
+```
+
+```{r}
+stats
+```
+
+
+Palettes, popups, and labels
+```{r}
+pal <- colorNumeric("BuPu", stats$density)
+
+labels <- sprintf(
+    "<strong>%s Prefecture</strong><br/>Pop. Density: %.2f ",
+    stats$prefecture, stats$density) %>%
+    lapply(htmltools::HTML)
+
+popups <- sprintf(
+    "Year: %s<br/>Magnitude: %.1f",
+    year(earthquakes$DateTime), earthquakes$Magnitude) %>% 
+    lapply(htmltools::HTML)
+
+magnitude_colors <- function(x) ifelse(x > 6.5, "red", "green")
+
+```
+
+```{r}
+japan_density <- leaflet(prefectures) %>% 
+    setView(lng = 136, lat = 35, zoom = 5) %>% 
+    addProviderTiles("CartoDB.Positron") %>%
+    addPolygons(color = "black",
+                weight = 0.5,
+                opacity = 0.8,
+                fillColor = ~pal(stats$density),
+                fillOpacity = 0.7,
+                highlightOptions = highlightOptions(
+                    weight = 1,
+                    opacity = 1,
+                    fillOpacity = 0.7,
+                    bringToFront = TRUE,
+                    sendToBack = TRUE
+                ),
+                label = labels,
+                labelOptions = labelOptions(
+                    style = list("font-weight" = "normal", padding = "3px 8px"),
+                    textsize = "15px",
+                    direction = "auto"
+                )
+    ) %>% 
+    addLegend(pal = pal, 
+              values = ~stats$density, 
+              opacity = 0.7, 
+              title = "Pop. Density",
+              position = "bottomright"
+    )
+```
+
+```{r}
+japan_density %>% 
+    addCircles(data = earthquakes,
+               lng = ~Longitude, 
+               lat = ~Latitude,
+               fill = FALSE,
+               radius = earthquakes$Magnitude ** 5.5,
+               color = ~magnitude_colors(earthquakes$Magnitude),
+               popup = popups
+               )
+
+
+```
+
 
