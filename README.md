@@ -7,6 +7,7 @@ Python:
 - geodatasets
 - pyprojroot
 - folium
+- geopy
 
 R:
 - sf
@@ -14,3 +15,5 @@ R:
 - here
 - leaflet
 - leaflet.extras
+- tidygeocoder
+- tmap

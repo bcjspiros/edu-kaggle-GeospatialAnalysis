@@ -1,0 +1,95 @@
+---
+title: "Geocoding and Geospatial joins"
+author: "Jay Spiros"
+date: "`r Sys.Date()`"
+format: html
+editor: source
+---
+
+```{r}
+#| label: load-libs
+#| message: false
+#| warning: false
+#| output: false
+
+library(here)
+library(tidyverse)
+library(sf)
+library(leaflet)
+library(tidygeocoder)
+```
+
+# Introduction
+In this tutorial, you'll learn about two common manipulations for geospatial data: geocoding and table joins.
+
+```{r}
+location <- tibble(place = "Fenway Park") %>% 
+    geocode(place, method = "osm", lat = latitude, long = longitude, full_results = TRUE)
+```
+
+```{r}
+location$display_name
+```
+
+```{r}
+location %>% 
+    select(latitude, longitude)
+```
+
+```{r}
+universities = read_csv(here("data/top_universities.csv"))
+head(universities)
+```
+
+```{r}
+nrow(universities)
+```
+
+```{r}
+universities_coded <- universities %>% 
+    geocode(Name, method = "osm", lat = Latitude, long = Longitude)
+```
+
+```{r}
+# perc <- (1 - sum(is.na(universities_coded$Latitude)) / nrow(universities_coded)) * 100
+perc <- sum(!is.na(universities_coded$Latitude)) / nrow(universities_coded) * 100
+print(str_glue("{perc}% of universities geocoded"))
+```
+
+```{r}
+universities_cleaned <- drop_na(universities_coded)
+```
+
+```{r}
+perc_cleaned <- (1 - sum(is.na(universities_cleaned$Latitude)) / nrow(universities_cleaned)) * 100
+print(str_glue("{perc_cleaned}% of universities geocoded"))
+```
+
+```{r}
+universities <- universities_cleaned %>% 
+    st_as_sf(
+        coords = c("Longitude", "Latitude"),
+        crs = 4326,
+        remove = FALSE
+    )
+```
+
+```{r}
+head(universities)
+```
+```{r}
+leaflet(universities) %>% 
+    addTiles() %>% 
+    setView(lng = 15, lat = 54, zoom = 2) %>% 
+    addMarkers(lng = ~Longitude, 
+               lat = ~Latitude,
+               clusterOptions = markerClusterOptions(),
+               popup = ~Name
+    )
+```
+
+# Spatial joins
+
+Use `st_join` Which defaults to an inner join, which is most likely what you want.
+
+Docs: <https://r-spatial.github.io/sf/reference/st_join.html>
