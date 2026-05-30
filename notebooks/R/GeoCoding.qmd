@@ -14,12 +14,14 @@ editor: source
 
 library(here)
 library(tidyverse)
+library(janitor)
 library(sf)
 library(leaflet)
 library(tidygeocoder)
 ```
 
 # Introduction
+
 In this tutorial, you'll learn about two common manipulations for geospatial data: geocoding and table joins.
 
 ```{r}
@@ -77,6 +79,7 @@ universities <- universities_cleaned %>%
 ```{r}
 head(universities)
 ```
+
 ```{r}
 leaflet(universities) %>% 
     addTiles() %>% 
@@ -90,6 +93,224 @@ leaflet(universities) %>%
 
 # Spatial joins
 
-Use `st_join` Which defaults to an inner join, which is most likely what you want.
+Use `st_join` In particular the join = argument is important
 
 Docs: <https://r-spatial.github.io/sf/reference/st_join.html>
+
+# Exercises
+
+```{r}
+#| message: false
+
+starbucks <-  read_csv(here("data/starbucks_locations.csv"))
+starbucks <-  clean_names(starbucks)
+```
+
+```{r}
+starbucks %>% summarise(across(everything(), ~ sum(is.na(.))))
+```
+
+```{r}
+rows_missing <- is.na(starbucks$longitude) | is.na(starbucks$latitude)
+
+starbucks[rows_missing, c("longitude", "latitude")] <-
+    geocode(starbucks[rows_missing, "address"], address, method = "osm")[ ,c("long", "lat")]
+```
+
+```{r}
+starbucks[starbucks$city == "Berkeley", ]
+```
+
+### these accomplish the same thing (tidyverse, from Claude)
+
+```{r}
+df <- df |>
+  mutate(needs_geocode = is.na(longitude) | is.na(latitude)) |>
+  group_by(needs_geocode) |>
+  group_modify(~ {
+    if (.y$needs_geocode) {
+      geocode(.x, address, method = "osm") |>
+        mutate(longitude = long, latitude = lat) |>
+        select(-long, -lat)
+    } else {
+      .x
+    }
+  }) |>
+  ungroup() |>
+  select(-needs_geocode)
+```
+
+This splits the dataframe into two groups (needs geocoding / doesn't), geocodes only the group that needs it, then reassembles. It's more verbose but stays entirely within tidy pipelines.
+
+A more concise tidyverse alternative using newer rows_update():
+
+```{r}
+geocoded <- df |>
+  filter(is.na(longitude) | is.na(latitude)) |>
+  select(address) |>
+  geocode(address, method = "osm") |>
+  rename(longitude = long, latitude = lat)
+
+df <- df |>
+  rows_update(geocoded, by = "address", unmatched = "ignore")
+```
+
+```{r}
+leaflet(starbucks %>% filter(city == "Berkeley")) %>% 
+    addTiles() %>% 
+    setView(lng = -122.26, lat = 37.88, zoom = 13) %>% 
+    addMarkers(lng = ~longitude, 
+               lat = ~latitude,
+               # clusterOptions = markerClusterOptions(),
+               popup = ~store_name)
+```
+
+
+## Joins
+
+```{r}
+CA_counties <- 
+    read_sf(here("data/CA_county_boundaries/CA_county_boundaries/CA_county_boundaries.shp"))
+
+```
+
+```{r}
+#| message: false
+
+# this CSV has leading zeros in GEOID leading readr to think it's a char column
+CA_median_age <- read_csv(here("data/CA_county_median_age.csv"), col_type = "d")
+CA_pop <- read_csv(here("data/CA_county_population.csv"))
+CA_high_earners <- read_csv(here("data/CA_county_high_earners.csv"))
+
+```
+
+```{r}
+CA_dataframes <- list(CA_counties, CA_pop, CA_median_age, CA_high_earners)
+CA_stats <- reduce(CA_dataframes, left_join, by = "GEOID")
+```
+
+```{r}
+CA_stats <- 
+    CA_stats %>% 
+    mutate(density = population / area_sqkm)
+```
+
+```{r}
+head(CA_stats)
+```
+
+### 4) Which counties look promising?
+
+Collapsing all of the information into a single GeoDataFrame also makes it much easier to select counties that meet specific criteria.
+
+Use the next code cell to create a GeoDataFrame `sel_counties` that contains a subset of the rows (and all of the columns) from the `CA_stats` GeoDataFrame. In particular, you should select counties where:
+
+- there are at least 100,000 households making \$150,000 per year,
+
+- the median age is less than 38.5, and
+
+- the density of inhabitants is at least 285 (per square kilometer).
+
+Additionally, selected counties should satisfy at least one of the following criteria:
+
+- there are at least 500,000 households making \$150,000 per year,
+
+- the median age is less than 35.5, or
+
+- the density of inhabitants is at least 1400 (per square kilometer).
+
+```{r}
+sel_counties <- 
+    CA_stats %>% 
+    filter(high_earners >= 100000,
+               median_age < 38.5,
+               density >= 285
+               ) %>% 
+    filter(when_any(
+        high_earners >= 500000,
+        median_age < 35.5,
+        density >= 1400
+    ))
+    
+```
+
+```{r}
+sel_counties
+```
+
+### transform starbucks dataframe to sf
+
+```{r}
+starbucks_gdf <- 
+    st_as_sf(starbucks,
+             coords = c("longitude", "latitude"),
+             crs = 4326,
+             remove = FALSE
+             )
+```
+
+```{r}
+starbucks_gdf
+```
+```{r}
+ggplot() +
+    geom_sf(data = sel_counties, fill = NA) +
+    #geom_sf(data = starbucks_gdf, color = "green") +
+    theme_minimal()
+```
+
+```{r}
+possible_stores <- st_join(sel_counties, starbucks_gdf) 
+num_stores <- nrow(possible_stores)
+```
+
+```{r}
+print(num_stores)
+print(nrow(starbucks_gdf))
+```
+```{r}
+head(possible_stores)
+```
+```{r}
+# if we don't do this leaflet will redraw the county polygon once for each row in the df, which is over 1000.
+# this creates a sub frame with the county polygons in there only once per county.
+# Could also go back the CA_counties dataframe and filter for the counties we want
+# but if the selected counties change we'd have to rewrite the filter
+county_borders <- possible_stores %>% 
+    group_by(name) %>% 
+    slice_head(n = 1)
+```
+
+
+```{r}
+leaflet(possible_stores) %>% 
+    addTiles() %>% 
+    setView(lng = -120, lat = 37, zoom = 6) %>%
+    addMarkers(lng = ~longitude, 
+               lat = ~latitude,
+               clusterOptions = markerClusterOptions(),
+               popup = ~store_name) %>% 
+    addPolygons(data = county_borders,
+                color = "black",
+                weight = 1,
+                opacity = 0.8,
+                #fillColor = "none",
+                #fillColor = "lightgreen",
+                fillOpacity = 0,
+                # highlightOptions = highlightOptions(
+                #     weight = 1,
+                #     opacity = 1,
+                #     fillOpacity = 0.7,
+                #     bringToFront = TRUE,
+                #     sendToBack = TRUE
+                # ),
+                label = ~name,
+                labelOptions = labelOptions(
+                    style = list("font-weight" = "normal", padding = "3px 8px"),
+                    textsize = "15px",
+                    direction = "auto"
+                )
+    )
+    
+```
+
