@@ -1,7 +1,8 @@
 ---
 title: "Your First Map"
 format: html
-editor: visual
+editor: source
+jupyter: ir
 ---
 
 # Reproducing the Python geospatial course in R

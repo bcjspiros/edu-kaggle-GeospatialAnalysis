@@ -1,6 +1,7 @@
 ---
 title: "Interactive Maps"
 format: html
+jupyter: ir
 ---
 
 # Introduction

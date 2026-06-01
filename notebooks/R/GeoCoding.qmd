@@ -4,6 +4,7 @@ author: "Jay Spiros"
 date: "`r Sys.Date()`"
 format: html
 editor: source
+jupyter: ir
 ---
 
 ```{r}

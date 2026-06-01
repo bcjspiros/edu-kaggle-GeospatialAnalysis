@@ -1,7 +1,8 @@
 ---
 title: "Coordinate Reference Systems"
 format: html
-editor: visual
+editor: source
+jupyter: ir
 ---
 
 # Kaggle Geospatial certificate CRS course in R
